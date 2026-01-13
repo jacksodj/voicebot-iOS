@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- DGX Spark Backend Configuration -->
+	<key>ServerConfiguration</key>
+	<dict>
+		<!-- Default Tailscale URL -->
+		<key>DefaultServerURL</key>
+		<string>ws://dgx-spark.tail-scale.ts.net:8080</string>
+
+		<!-- Local development URL -->
+		<key>LocalServerURL</key>
+		<string>ws://localhost:8080</string>
+
+		<!-- Production URL (with SSL) -->
+		<key>ProductionServerURL</key>
+		<string>wss://dgx-spark.yourdomain.com:8080</string>
+
+		<!-- Connection timeout in seconds -->
+		<key>ConnectionTimeout</key>
+		<integer>30</integer>
+
+		<!-- Reconnection attempts -->
+		<key>MaxReconnectAttempts</key>
+		<integer>5</integer>
+	</dict>
+
+	<!-- Audio Configuration -->
+	<key>AudioConfiguration</key>
+	<dict>
+		<!-- Sample rate in Hz (16kHz for speech) -->
+		<key>SampleRate</key>
+		<integer>16000</integer>
+
+		<!-- Number of audio channels (1 = mono) -->
+		<key>Channels</key>
+		<integer>1</integer>
+
+		<!-- Audio format -->
+		<key>Format</key>
+		<string>pcm_s16le</string>
+
+		<!-- Buffer size -->
+		<key>BufferSize</key>
+		<integer>1024</integer>
+	</dict>
+
+	<!-- Tailscale Configuration -->
+	<key>TailscaleConfiguration</key>
+	<dict>
+		<!-- Tailscale domain suffix -->
+		<key>DomainSuffix</key>
+		<string>tail-scale.ts.net</string>
+
+		<!-- DGX Spark hostname on Tailscale -->
+		<key>DGXSparkHostname</key>
+		<string>dgx-spark</string>
+
+		<!-- Port for voice agent WebSocket -->
+		<key>WebSocketPort</key>
+		<integer>8080</integer>
+	</dict>
+
+	<!-- n8n Integration Configuration -->
+	<key>N8NConfiguration</key>
+	<dict>
+		<!-- n8n webhook base URL (Raspberry Pi) -->
+		<key>WebhookBaseURL</key>
+		<string>http://pi.local:5678/webhook</string>
+
+		<!-- Voice assistant webhook endpoint -->
+		<key>VoiceAssistantWebhook</key>
+		<string>/voice-assistant</string>
+	</dict>
+
+	<!-- Feature Flags -->
+	<key>Features</key>
+	<dict>
+		<!-- Enable debug logging -->
+		<key>DebugLogging</key>
+		<true/>
+
+		<!-- Enable VoIP push notifications -->
+		<key>VoIPPushEnabled</key>
+		<true/>
+
+		<!-- Enable Quick Actions -->
+		<key>QuickActionsEnabled</key>
+		<true/>
+
+		<!-- Enable CallKit integration -->
+		<key>CallKitEnabled</key>
+		<true/>
+	</dict>
+</dict>
+</plist>
