@@ -20,9 +20,11 @@ class WebSocketClient: NSObject {
     private var serverURL: URL
 
     private var reconnectAttempts = 0
-    private let maxReconnectAttempts = 5
+    private let maxReconnectAttempts: Int
     private var reconnectTimer: Timer?
     private var isManuallyDisconnected = false
+    private let autoReconnect: Bool
+    private let connectionTimeout: TimeInterval
 
     var isConnected: Bool {
         return webSocketTask?.state == .running
@@ -30,16 +32,22 @@ class WebSocketClient: NSObject {
 
     // MARK: - Initialization
 
-    init(serverURL: String) {
+    init(serverURL: String,
+         timeout: Int = 30,
+         maxReconnectAttempts: Int = 5,
+         autoReconnect: Bool = true) {
         // Default to Tailscale URL for DGX Spark
         guard let url = URL(string: serverURL) else {
             fatalError("Invalid server URL: \(serverURL)")
         }
         self.serverURL = url
+        self.connectionTimeout = TimeInterval(timeout)
+        self.maxReconnectAttempts = maxReconnectAttempts
+        self.autoReconnect = autoReconnect
         super.init()
 
         let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForRequest = connectionTimeout
         configuration.timeoutIntervalForResource = 300
         self.urlSession = URLSession(configuration: configuration, delegate: self, delegateQueue: OperationQueue())
     }
@@ -56,7 +64,7 @@ class WebSocketClient: NSObject {
         print("Connecting to WebSocket: \(serverURL.absoluteString)")
 
         var request = URLRequest(url: serverURL)
-        request.timeoutInterval = 30
+        request.timeoutInterval = connectionTimeout
 
         webSocketTask = urlSession?.webSocketTask(with: request)
         webSocketTask?.resume()
@@ -143,14 +151,25 @@ class WebSocketClient: NSObject {
             return
         }
 
-        guard reconnectAttempts < maxReconnectAttempts else {
+        guard autoReconnect else {
+            print("Auto-reconnect disabled")
+            return
+        }
+
+        // 0 means unlimited reconnect attempts
+        guard maxReconnectAttempts == 0 || reconnectAttempts < maxReconnectAttempts else {
             print("Max reconnection attempts reached")
             return
         }
 
         reconnectAttempts += 1
         let delay = min(pow(2.0, Double(reconnectAttempts)), 30.0) // Exponential backoff, max 30s
-        print("Attempting reconnection \(reconnectAttempts)/\(maxReconnectAttempts) in \(delay) seconds")
+
+        if maxReconnectAttempts == 0 {
+            print("Attempting reconnection \(reconnectAttempts) (unlimited) in \(delay) seconds")
+        } else {
+            print("Attempting reconnection \(reconnectAttempts)/\(maxReconnectAttempts) in \(delay) seconds")
+        }
 
         reconnectTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             self?.connect()
@@ -161,6 +180,24 @@ class WebSocketClient: NSObject {
         reconnectAttempts = 0
         reconnectTimer?.invalidate()
         reconnectTimer = nil
+    }
+
+    // MARK: - Configuration Info
+
+    var currentServerURL: String {
+        return serverURL.absoluteString
+    }
+
+    var currentTimeout: TimeInterval {
+        return connectionTimeout
+    }
+
+    var currentMaxReconnectAttempts: Int {
+        return maxReconnectAttempts
+    }
+
+    var isAutoReconnectEnabled: Bool {
+        return autoReconnect
     }
 }
 
