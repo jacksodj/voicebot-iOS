@@ -24,13 +24,20 @@ class AudioEngine: NSObject {
     private var audioFormat: AVAudioFormat?
     private var isCapturing = false
 
-    // Audio configuration
-    private let sampleRate: Double = 16000 // 16kHz for speech recognition
-    private let channelCount: AVAudioChannelCount = 1 // Mono
+    // Audio configuration (now configurable)
+    private let sampleRate: Double
+    private let channelCount: AVAudioChannelCount
+    private let outputMode: SettingsManager.AudioOutputMode
 
     // MARK: - Initialization
 
-    override init() {
+    init(sampleRate: Double = 16000,
+         channels: UInt32 = 1,
+         outputMode: SettingsManager.AudioOutputMode = .speaker) {
+        self.sampleRate = sampleRate
+        self.channelCount = AVAudioChannelCount(channels)
+        self.outputMode = outputMode
+
         inputNode = audioEngine.inputNode
         outputNode = audioEngine.outputNode
         super.init()
@@ -44,10 +51,7 @@ class AudioEngine: NSObject {
         // Attach player node
         audioEngine.attach(playerNode)
 
-        // Get the input format
-        let inputFormat = inputNode.inputFormat(forBus: 0)
-
-        // Create desired format (16kHz, mono, PCM)
+        // Create desired format (configurable sample rate and channels, PCM 16-bit)
         guard let desiredFormat = AVAudioFormat(
             commonFormat: .pcmFormatInt16,
             sampleRate: sampleRate,
@@ -63,7 +67,7 @@ class AudioEngine: NSObject {
         // Connect player node to output
         audioEngine.connect(playerNode, to: outputNode, format: desiredFormat)
 
-        print("Audio engine configured: \(sampleRate)Hz, \(channelCount) channel(s)")
+        print("Audio engine configured: \(sampleRate)Hz, \(channelCount) channel(s), output: \(outputMode.displayName)")
     }
 
     // MARK: - Recording
@@ -75,10 +79,29 @@ class AudioEngine: NSObject {
         }
 
         do {
-            // Configure audio session
+            // Configure audio session based on output mode
             let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .defaultToSpeaker])
+            var options: AVAudioSession.CategoryOptions = [.allowBluetooth]
+
+            switch outputMode {
+            case .speaker:
+                options.insert(.defaultToSpeaker)
+            case .receiver:
+                // No additional options for receiver
+                break
+            case .automatic:
+                options.insert(.defaultToSpeaker)
+            }
+
+            try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: options)
             try audioSession.setActive(true)
+
+            // Override output port if specifically set to receiver
+            if outputMode == .receiver {
+                try audioSession.overrideOutputAudioPort(.none)
+            } else if outputMode == .speaker {
+                try audioSession.overrideOutputAudioPort(.speaker)
+            }
 
             // Install tap on input node
             let inputFormat = inputNode.inputFormat(forBus: 0)
@@ -123,33 +146,27 @@ class AudioEngine: NSObject {
             return
         }
 
-        do {
-            // Convert Data to AVAudioPCMBuffer
-            let frameCount = UInt32(data.count) / audioFormat.streamDescription.pointee.mBytesPerFrame
-            guard let buffer = AVAudioPCMBuffer(pcmFormat: audioFormat, frameCapacity: frameCount) else {
-                print("Failed to create audio buffer")
-                return
-            }
-
-            buffer.frameLength = frameCount
-
-            // Copy data to buffer
-            data.withUnsafeBytes { rawBufferPointer in
-                guard let address = rawBufferPointer.baseAddress else { return }
-                buffer.int16ChannelData?.pointee.update(from: address.assumingMemoryBound(to: Int16.self), count: Int(frameCount))
-            }
-
-            // Schedule and play buffer
-            if !playerNode.isPlaying {
-                playerNode.play()
-            }
-
-            playerNode.scheduleBuffer(buffer, completionHandler: nil)
-
-        } catch {
-            print("Failed to play audio: \(error.localizedDescription)")
-            delegate?.audioEngine(self, didEncounterError: error)
+        // Convert Data to AVAudioPCMBuffer
+        let frameCount = UInt32(data.count) / audioFormat.streamDescription.pointee.mBytesPerFrame
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: audioFormat, frameCapacity: frameCount) else {
+            print("Failed to create audio buffer")
+            return
         }
+
+        buffer.frameLength = frameCount
+
+        // Copy data to buffer
+        data.withUnsafeBytes { rawBufferPointer in
+            guard let address = rawBufferPointer.baseAddress else { return }
+            buffer.int16ChannelData?.pointee.update(from: address.assumingMemoryBound(to: Int16.self), count: Int(frameCount))
+        }
+
+        // Schedule and play buffer
+        if !playerNode.isPlaying {
+            playerNode.play()
+        }
+
+        playerNode.scheduleBuffer(buffer, completionHandler: nil)
     }
 
     func stopPlayback() {
@@ -173,6 +190,20 @@ class AudioEngine: NSObject {
         delegate?.audioEngine(self, didCaptureAudio: data)
     }
 
+    // MARK: - Configuration Info
+
+    var currentSampleRate: Double {
+        return sampleRate
+    }
+
+    var currentChannelCount: UInt32 {
+        return UInt32(channelCount)
+    }
+
+    var currentOutputMode: SettingsManager.AudioOutputMode {
+        return outputMode
+    }
+
     // MARK: - Cleanup
 
     deinit {
@@ -190,12 +221,30 @@ class AudioSessionManager {
 
     private init() {}
 
-    func configureForVoiceCall() {
+    func configureForVoiceCall(outputMode: SettingsManager.AudioOutputMode = .speaker) {
         do {
             let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .defaultToSpeaker])
+            var options: AVAudioSession.CategoryOptions = [.allowBluetooth]
+
+            switch outputMode {
+            case .speaker:
+                options.insert(.defaultToSpeaker)
+            case .receiver:
+                break
+            case .automatic:
+                options.insert(.defaultToSpeaker)
+            }
+
+            try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: options)
             try audioSession.setActive(true)
-            print("Audio session configured for voice call")
+
+            if outputMode == .receiver {
+                try audioSession.overrideOutputAudioPort(.none)
+            } else if outputMode == .speaker {
+                try audioSession.overrideOutputAudioPort(.speaker)
+            }
+
+            print("Audio session configured for voice call (output: \(outputMode.displayName))")
         } catch {
             print("Failed to configure audio session: \(error.localizedDescription)")
         }
